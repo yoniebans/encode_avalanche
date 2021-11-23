@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0
-
 pragma solidity ^0.8.0;
 
-contract VolcanoCoin {
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-    uint totalSupply = 10000;
-    address owner;
-    mapping(address => uint) balances;
-    mapping(address => Payment[]) payments;
+contract VolcanoCoin is ERC20("VolcanoCoin", "VLC"), Ownable {
 
-    event newTotalSupply(uint _totalSupply);
+    uint256 constant initialSupply = 10000;
+    mapping(address => Payment[]) public payments;
+    event supplyChanged(uint _changeAmount);
     event newTransfer(address _from, address _to, uint _value);
 
     struct Payment {
@@ -18,36 +17,23 @@ contract VolcanoCoin {
     }
 
     constructor() {
-        owner = msg.sender;
-        balances[owner] = totalSupply;
+        _mint(msg.sender, initialSupply);
     }
 
-    modifier onlyOwner {
-        require(msg.sender == owner, "Only owner can call this.");
-        _;
+    function addToTotalSupply(uint _amount) public onlyOwner {
+        _mint(msg.sender, _amount);
+        emit supplyChanged(_amount);
     }
 
-    function getTotalSupply() public view returns (uint) {
-        return totalSupply;
+    function transfer(address _recipient, uint amount) public virtual override returns (bool) {
+        _transfer(msg.sender, _recipient, amount);
+        addPaymentRecord(msg.sender, _recipient, amount);
+        return true;
     }
 
-    function getBalance(address _address) public view returns (uint) {
-        return balances[_address];
-    }
-
-    function increaseTotalSupply() public onlyOwner {
-        totalSupply += 1000;
-        emit newTotalSupply(totalSupply);
-    }
-
-    function transfer(address _recipient, uint amount) public {
-        require(balances[msg.sender] >= amount, "Insufficient funds.");
-        balances[msg.sender] -= amount;
-        balances[_recipient] += amount;
-        emit newTransfer(msg.sender, _recipient, amount);
-
-        Payment memory payment = Payment(_recipient, amount);
-        payments[msg.sender].push(payment);
+    function addPaymentRecord(address _sender, address _recipient, uint _amount) internal {
+        payments[_sender].push(Payment(_recipient, _amount));
+        emit newTransfer(_sender, _recipient, _amount);
     }
 
     function getPayments(address _address) public view returns (Payment[] memory) {
